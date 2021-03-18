@@ -14,20 +14,18 @@ TYPE FileType
     Len AS UNSIGNED LONG
 END TYPE
 
-install "https://raw.githubusercontent.com/all-other-usernames-were-taken/UPM/main/test.upm"
+install "github.com/all-other-usernames-were-taken/UPM/blob/main/test.upm"
 SUB install (UPMUrl$)
     DIM f AS STRING
     PRINT "Installing package..."
 
-    'PRINT "  Downloading file...";
-    LoadFile f, UPMUrl$
-    'CALL DownloadFile(UPMUrl$, f, 10)
-    'IF f = "" THEN
-    '    PRINT "Failed"
-    '    PRINT "Failed to download package. Check your internet connection and try again."
-    '    EXIT SUB
-    'END IF
-    'PRINT "done"
+    PRINT "  Downloading file..."
+    'LoadFile f, UPMUrl$
+    f = DownloadFile(UPMUrl$, 10)
+    IF f = "" THEN
+        PRINT "Download failed."
+        EXIT SUB
+    END IF
 
     'PRINT "  Decompressing...";
     'f = DEFLATE$(f)
@@ -83,17 +81,28 @@ END SUB
 
 'Taken from QB64 wiki
 'Adapted to use a string instead of a file
-SUB DownloadFile (url$, file$, timelimit) ' returns -1 if successful, 0 if not
+FUNCTION DownloadFile$ (url$, timelimit) ' returns -1 if successful, 0 if not
+    PRINT "    Parsing URL...";
     url2$ = url$
     x = INSTR(url2$, "/")
     IF x THEN url2$ = LEFT$(url$, x - 1)
+    PRINT "done"
+    PRINT "    Connecting to " + url2$ + "...";
     client = _OPENCLIENT("TCP/IP:80:" + url2$)
-    IF client = 0 THEN EXIT SUB
+    IF client = 0 THEN
+        PRINT "failed"
+        PRINT "Failed to connect. Check your internet connection and try again."
+        EXIT FUNCTION
+    END IF
+    PRINT "done"
+    PRINT "    Sending HTTP request...";
     e$ = CHR$(13) + CHR$(10) ' end of line characters
     url3$ = RIGHT$(url$, LEN(url$) - x + 1)
     x$ = "GET " + url3$ + " HTTP/1.1" + e$
     x$ = x$ + "Host: " + url2$ + e$ + e$
     PUT #client, , x$
+    PRINT "done"
+    PRINT "    Recieving file...";
     t! = TIMER ' start time
     DO
         _DELAY 0.05 ' 50ms delay (20 checks per second)
@@ -109,15 +118,17 @@ SUB DownloadFile (url$, file$, timelimit) ' returns -1 if successful, 0 if not
                     i3 = i3 + 4 'move i3 to start of data
                     IF (LEN(a$) - i3 + 1) = l THEN
                         CLOSE client ' CLOSE CLIENT
-                        file$ = MID$(a$, i3, l)
-                        EXIT SUB
+                        DownloadFile$ = MID$(a$, i3, l)
+                        PRINT "done"
+                        EXIT FUNCTION
                     END IF ' availabledata = l
                 END IF ' i3
             END IF ' i2
         END IF ' i
     LOOP UNTIL TIMER > t! + timelimit ' (in seconds)
     CLOSE client
-END SUB
+    PRINT "failed"
+END FUNCTION
 
 
 'taken from QB64-Themes
