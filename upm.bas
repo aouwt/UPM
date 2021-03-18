@@ -1,4 +1,7 @@
 $NOPREFIX
+$CONSOLE:ONLY
+_DEST _CONSOLE
+
 TYPE UPMType
     Name AS STRING
     Dev AS STRING
@@ -14,36 +17,72 @@ TYPE FileType
     Len AS UNSIGNED LONG
 END TYPE
 
-install "github.com/all-other-usernames-were-taken/UPM/blob/main/test.upm"
+install "https://raw.githubusercontent.com/all-other-usernames-were-taken/UPM/main/test.upm" '<- Ah, GH needs HTTPS. We must use curl, wget, or the like, OR use local files for testing.
+SYSTEM
+
 SUB install (UPMUrl$)
     DIM f AS STRING
     PRINT "Installing package..."
+    IF DIREXISTS("/tmp/upm") THEN
+        PRINT "  Removing /tmp/upm...";
+        SHELL "rm -rf /tmp/upm"
+        PRINT "done"
+        PRINT
+    END IF
 
-    PRINT "  Downloading file..."
-    'LoadFile f, UPMUrl$
-    f = DownloadFile(UPMUrl$, 10)
-    IF f = "" THEN
-        PRINT "Download failed."
-        EXIT SUB
+    MKDIR "/tmp/upm/"
+
+    IF LEFT$(UPMUrl$, 5) = "file://" THEN 'file:// are local files
+        PRINT "  Loading file...";
+        f = LoadFile(MID$(UPMUrl$, 5))
+        PRINT "done"
+
+    ELSEIF LEFT$(UPMUrl$, 5) = "http://" THEN 'http:// we can use built-in downlaoder. QB64 cannot use SSL as far as i have seen, so...
+        PRINT "  Downloading file..."
+        f = DownloadFile(MID$(UPMUrl$, 5), 10)
+        IF f = "" THEN
+            PRINT "Download failed."
+            EXIT SUB
+        END IF
+
+    ELSE 'for https:// we need to use curl/wget.
+        PRINT "  Downloading file..."
+        PRINT "    curl '" + UPMUrl$ + "' -o /tmp/upm/pkg"
+        SHELL "curl '" + UPMUrl$ + "' -o /tmp/upm/pkg"
+
+        IF FILEEXISTS("/tmp/upm/pkg") THEN
+            PRINT "    Loading file...";
+            f = LoadFile("/tmp/upm/pkg")
+            PRINT "done"
+            PRINT "    Removing file...";
+            SHELL "rm -f /tmp/upm/pkg"
+            PRINT "done"
+            PRINT
+        ELSE
+            PRINT "  File could not be downloaded!"
+            EXIT SUB
+        END IF
     END IF
 
     'PRINT "  Decompressing...";
     'f = DEFLATE$(f)
     'PRINT "done"
+    '?
 
     PRINT "  Reading package info...";
     DIM UPM AS UPMType, File(100) AS FileType
     CALL ParseUPM(f, UPM, File(), ofs%)
     PRINT "done"
+    PRINT
 
     PRINT "  Unpacking files..."
-    MKDIR "/tmp/upm"
     DIM n AS UNSIGNED INTEGER
     DIM UPMPos AS UNSIGNED LONG
     UPMPos = ofs%
+    n = 0
     DO
 
-        PRINT File(n).Name; "...";
+        PRINT "    "; File(n).Name; "...";
         f% = FREEFILE
         OPEN "/tmp/upm/" + File(n).Name FOR OUTPUT AS #f%
         PRINT #f%, MID$(f, UPMPos, File(n).Len);
@@ -54,29 +93,40 @@ SUB install (UPMUrl$)
 
     LOOP UNTIL File(n).Name = ""
     PRINT "  Files sucessfully unpacked."
+    PRINT
 
-    PRINT "  Installing via external installer..."
-    SHELL "/tmp/upm/i.sh"
-    PRINT "  Installation completed,"
+
+    IF FILEEXISTS("/tmp/upm/i.sh") THEN
+        PRINT "  Installing via external installer..."
+        SHELL "/tmp/upm/i.sh"
+        PRINT "  Installation script done."
+        PRINT
+    ELSE
+        PRINT "  Installation script not found, copying all files to CWD...";
+        SHELL "cp -r /tmp/upm/* ."
+        PRINT "done"
+        PRINT
+    END IF
 
     PRINT "  Cleaning up...";
-    'SHELL "rm -rf /tmp/upm"
+    SHELL "rm -rf /tmp/upm"
     'SHELL "/tmp/upm/c.sh"
     PRINT "done"
+    PRINT
 
     PRINT "Installation completed sucessfully!"
 END SUB
 
 
-SUB LoadFile (filedata$, file$)
+FUNCTION LoadFile$ (file$)
 
     f% = FREEFILE
     OPEN file$ FOR BINARY AS #f%
-    filedata$ = SPACE$(LOF(f%))
-    GET #f%, , filedata$
+    LoadFile$ = SPACE$(LOF(f%))
+    GET #f%, , LoadFile$
     CLOSE #f%
 
-END SUB
+END FUNCTION
 
 
 'Taken from QB64 wiki
@@ -143,7 +193,7 @@ SUB ParseUPM (UPMData$, UPM AS UPMType, File() AS FileType, UPMEnd AS INTEGER) '
             CASE "desc"
                 DO
                     GOSUB NewLine
-                    IF Ln$ = "." THEN EXIT DO
+                    IF ASC(Ln$) = 46 THEN EXIT DO
                     UPM.Desc = UPM.Desc + Ln$ + CHR$(10)
                 LOOP
 
@@ -152,7 +202,7 @@ SUB ParseUPM (UPMData$, UPM AS UPMType, File() AS FileType, UPMEnd AS INTEGER) '
                 DIM n AS UNSIGNED LONG
                 DO
                     GOSUB NewLine
-                    IF Ln$ = "." THEN EXIT DO
+                    IF ASC(Ln$) = 46 THEN EXIT DO
                     GOSUB Separate
                     File(n).Name = Val$
                     File(n).Len = VAL(Key$)
@@ -196,4 +246,3 @@ SUB ParseUPM (UPMData$, UPM AS UPMType, File() AS FileType, UPMEnd AS INTEGER) '
     Val$ = LTRIM$(RTRIM$(MID$(Ln$, I% + 1)))
     RETURN
 END SUB
-
