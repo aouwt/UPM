@@ -9,16 +9,104 @@ TYPE UPMType
     Date AS STRING
     Ver AS STRING
     VerNo AS FLOAT
-    Test AS BYTE
 END TYPE
 
 TYPE FileType
     Name AS STRING
     Len AS UNSIGNED LONG
 END TYPE
+PRINT "############### Universal Package Manager #################"
+PRINT "#      v1 -- (c) 2021 all-other-usernames-were-taken      #"
+PRINT "#  https://github.com/all-other-usernames-were-taken/upm  #"
+PRINT "#"; RandomMsg$(57); "#"
+PRINT "###########################################################"
+REM install "https://raw.githubusercontent.com/all-other-usernames-were-taken/UPM/main/test.upm" '<- Ah, GH needs HTTPS. We must use curl, wget, or the like, OR use local files for testing.
 
-install "https://raw.githubusercontent.com/all-other-usernames-were-taken/UPM/main/test.upm" '<- Ah, GH needs HTTPS. We must use curl, wget, or the like, OR use local files for testing.
+SELECT CASE COMMAND$(1)
+    CASE "install"
+        install COMMAND$(2)
+
+    CASE "generate-ui"
+        RunGenUI
+
+    CASE "help", "?", "--help", "-h"
+        PRINT "USAGE: upm install <package>"
+        PRINT "       upm generate-ui"
+        'PRINT "       upm generate <options>"
+        PRINT "       upm help"
+        PRINT ""
+    CASE ELSE
+        PRINT "Invalid command '" + COMMAND$(1) + "'. Use 'upm help' for valid commands."
+END SELECT
 SYSTEM
+
+
+SUB RunGenUI
+    DIM UPM AS UPMType
+    upmfile$ = "Untitled.upm"
+    UPM.Name = "untitled-program"
+    UPM.Dev = "NA"
+    UPM.Desc = "NA"
+    UPM.Date = DATE$
+    UPM.Ver = "NA"
+    UPM.VerNo = 0
+
+    DO
+        ContLoop:
+        GOSUB refresh
+        INPUT "Press a key: ", k$
+        SELECT CASE LCASE$(RIGHT$(k$, 1))
+            CASE "n"
+                INPUT "Package Name: ", k$
+                FOR i% = 1 TO LEN(k$)
+                    SELECT CASE ASC(k$, i%)
+                        CASE ASC("a") - ASC("z"), ASC("-"), ASC("_"), ASC(".")
+                        CASE ELSE
+                            PRINT "Error: Package name cannot have control characters!"
+                            INPUT "Press any key...", k$
+                            GOTO ContLoop
+                    END SELECT
+                NEXT
+                k$ = UPM.Name
+
+                'CASE "d"
+            CASE "e"
+                INPUT "Developer Name: ", UPM.Dev
+
+            CASE "v"
+                INPUT "Version: ", UPM.Ver
+
+            CASE "r"
+                INPUT "Version Number: ", UPM.VerNo
+
+            CASE "g"
+
+            CASE "f"
+                INPUT "Grab files from: ", k$
+                IF NOT DIREXISTS(k$) THEN
+                    PRINT "Error: Directory does not exist!"
+                    INPUT "Press any key...", k$
+                    GOTO ContLoop
+                END IF
+                upmdir$ = k$
+
+        END SELECT
+    LOOP
+
+    refresh:
+    CLS
+    PRINT "UPM Generator - v1 | "; UPM.Name
+    PRINT ""
+    PRINT "Grab (f)iles from: "; upmdir$
+    PRINT "(N)ame: "; UPM.Name
+    PRINT "(D)ate: "; UPM.Date
+    PRINT "D(e)veloper: "; UPM.Dev
+    PRINT "(V)ersion: "; UPM.Ver
+    PRINT "Ve(r)sion Number: "; UPM.VerNo
+    PRINT ""
+    PRINT "<(G)enerate>"
+    RETURN
+END SUB
 
 SUB install (UPMUrl$)
     DIM f AS STRING
@@ -32,14 +120,14 @@ SUB install (UPMUrl$)
 
     MKDIR "/tmp/upm/"
 
-    IF LEFT$(UPMUrl$, 5) = "file://" THEN 'file:// are local files
+    IF LEFT$(UPMUrl$, 7) = "file://" THEN 'file:// are local files
         PRINT "  Loading file...";
-        f = LoadFile(MID$(UPMUrl$, 5))
+        f = LoadFile(MID$(UPMUrl$, 7))
         PRINT "done"
 
-    ELSEIF LEFT$(UPMUrl$, 5) = "http://" THEN 'http:// we can use built-in downlaoder. QB64 cannot use SSL as far as i have seen, so...
+    ELSEIF LEFT$(UPMUrl$, 7) = "http://" THEN 'http:// we can use built-in downlaoder. QB64 cannot use SSL as far as i have seen, so...
         PRINT "  Downloading file..."
-        f = DownloadFile(MID$(UPMUrl$, 5), 10)
+        f = DownloadFile(MID$(UPMUrl$, 7), 10)
         IF f = "" THEN
             PRINT "Download failed."
             EXIT SUB
@@ -246,3 +334,57 @@ SUB ParseUPM (UPMData$, UPM AS UPMType, File() AS FileType, UPMEnd AS INTEGER) '
     Val$ = LTRIM$(RTRIM$(MID$(Ln$, I% + 1)))
     RETURN
 END SUB
+
+
+FUNCTION RandomMsg$ (l%)
+    CONST Items = 36
+    RANDOMIZE TIMER
+
+    ChooseNew:
+    ItemToPrint% = RND * Items
+    RESTORE msgs
+    FOR i% = 0 TO ItemToPrint%
+        READ s$
+    NEXT
+    IF LEN(s$) > l% GOTO ChooseNew 'Make sure we aren't using a string that's too long
+
+    RandomMsg$ = SPACE$((l% - LEN(s$)) / 2) + s$
+    RandomMsg$ = RandomMsg$ + SPACE$(l% - LEN(RandomMsg$))
+    msgs:
+    DATA "(insert clever joke here)"
+    DATA "Totally not a ripoff of dpkg!"
+    DATA "rm -rf / --no-preserve-root"
+    DATA "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+    DATA "Isn't this the greatest thing ever?": 'no
+    DATA ":(){ :|:& };:"
+    DATA "yet another package manager nobody needs"
+    DATA "Why did the chicken cross the road?"
+    DATA "i speel good"
+    DATA "[Laughter] - You dumb bitch"
+    DATA "computer go brr"
+    DATA "  this text is TOTALLY centered!            "
+    DATA "HOO HAH TIKI TIKI"
+    DATA "reject humanity,return to monke"
+    DATA "hmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm"
+    DATA "Say hi to Fellippe for me!"
+    DATA "10 PRINT 'Hello, World!'  20 GOTO 10"
+    DATA "My man Kevin on the ledge and shit"
+    DATA "skamtebord"
+    DATA "rm -rf /"
+    DATA "(Y) S ame"
+    DATA "JMP *"
+    DATA "ur mom gae"
+    DATA "curl > wget. Fight me."
+    DATA "hyperfixations go brr"
+    DATA "i use arch btw": 'no i dont
+    DATA "Dead memes go brr"
+    DATA "FFFFFFFFFFFFFFFFUUUUUUUUUUUUUUU..."
+    DATA "Free V-Bucks!"
+    DATA "Look! It's a thing!"
+    DATA "unfinished projects go brr"
+    DATA "Hey all, Scott here!"
+    DATA "I am out of ideas for what to put here lol."
+    DATA "JOKEEFUNNY"
+    DATA "I really should be doing homework right now..."
+    DATA "penis"
+END FUNCTION
