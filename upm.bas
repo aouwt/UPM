@@ -1,49 +1,34 @@
-$NOPREFIX
-'$CONSOLE:ONLY
-'_DEST _CONSOLE
-
-DIM SHARED NL AS STRING * 1
-NL = CHR$(10)
-TYPE UPMType
-    Name AS STRING
-    Dev AS STRING
-    Desc AS STRING
-    Date AS STRING
-    Ver AS STRING
-    VerNo AS FLOAT
-END TYPE
-
-TYPE FileType
-    Name AS STRING
-    Len AS UNSIGNED LONG
-END TYPE
-PRINT "############### Universal Package Manager #################"
-PRINT "#      v1 -- (c) 2021 all-other-usernames-were-taken      #"
-PRINT "#  https://github.com/all-other-usernames-were-taken/upm  #"
-PRINT "#"; RandomMsg$(57); "#"
-PRINT "###########################################################"
+'$INCLUDE:'./head.bi'
+$IF USECONSOLE = TRUE THEN
+    PRINT "############### Universal Package Manager #################"
+    PRINT "#      v1 -- (c) 2021 all-other-usernames-were-taken      #"
+    PRINT "#  https://github.com/all-other-usernames-were-taken/upm  #"
+    PRINT "#"; RandomMsg$(57); "#"
+    PRINT "###########################################################"
+$END IF
 InitialCWD$ = CWD$
-REM install "https://raw.githubusercontent.com/all-other-usernames-were-taken/UPM/main/test.upm" '<- Ah, GH needs HTTPS. We must use curl, wget, or the like, OR use local files for testing.
 
 SELECT CASE COMMAND$(1)
     CASE "install"
         install COMMAND$(2)
 
-    CASE "generate-ui"
+    CASE "gen-ui"
         RunGenUI
 
-    CASE "help", "?", "--help", "-h", ""
-        PRINT "USAGE: upm install <package>"
-        PRINT "       upm generate-ui"
-        'PRINT "       upm generate <options>"
-        PRINT "       upm help"
-        PRINT ""
+    CASE "gen"
+        RunGenCMD
 
+    CASE "help", "?", "--help", "-h", ""
+        RunHelp
     CASE ELSE
         PRINT "Invalid command '" + COMMAND$(1) + "'. Use 'upm help' for valid commands."
 END SELECT
-SYSTEM
+$IF USECONSOLE = TRUE THEN
+    SYSTEM
+$END IF
 
+'$INCLUDE:'./help.bi'
+'$INCLUDE:'./utils.bi'
 
 SUB RunGenUI
     DIM UPM AS UPMType
@@ -85,6 +70,9 @@ SUB RunGenUI
             CASE "g"
                 GenerateUPM UPM, UPM.Name + ".upm", upmdir$
 
+            CASE "u"
+                UPM.Compressed = (UPM.Compressed = 0) 'If equal to 0, set to -1, otherwise set to 0
+
             CASE "f"
                 INPUT "Grab files from: ", k$
                 IF NOT DIREXISTS(k$) THEN
@@ -109,6 +97,7 @@ SUB RunGenUI
     PRINT "D(e)veloper: "; UPM.Dev
     PRINT "(V)ersion: "; UPM.Ver
     PRINT "Ve(r)sion Number: "; UPM.VerNo
+    PRINT "(U)se compression: "; UPM.Compressed
     PRINT ""
     PRINT "Supported OSs: ";
     IF hasi.sh` THEN PRINT "Linux ";
@@ -118,6 +107,17 @@ SUB RunGenUI
     PRINT
     PRINT "(G)enerate!"
     RETURN
+END SUB
+
+
+SUB RunGenCMD
+    DIM UPM AS UPMType
+    UPM.Name = "untitled-program"
+    UPM.Dev = "NA"
+    UPM.Desc = "NA"
+    UPM.Date = DATE$
+    UPM.Ver = "NA"
+    UPM.VerNo = 0
 END SUB
 
 SUB install (UPMUrl$)
@@ -132,12 +132,12 @@ SUB install (UPMUrl$)
 
     MKDIR "/tmp/upm/"
 
-    IF LEFT$(UPMUrl$, 2) = "./" THEN './ are local files
+    IF LEFT$(UPMUrl$, 2) = "." OR LEFT$(UPMUrl$, 2) = "/" THEN '. and / are local files
         PRINT "  Loading file..."
-        f = LoadFile(MID$(UPMUrl$, 3))
+        f = LoadFile(UPMUrl$)
         'PRINT "done"
 
-    ELSEIF LEFT$(UPMUrl$, 7) = "http://" THEN 'http:// we can use built-in downlaoder. QB64 cannot use SSL as far as i have seen, so...
+    ELSEIF LEFT$(UPMUrl$, 7) = "http://" THEN 'http we can use built-in downlaoder. QB64 cannot use SSL as far as i have seen, so...
         PRINT "  Downloading file..."
         f = DownloadFile(MID$(UPMUrl$, 7), 10)
         IF f = "" THEN
@@ -145,7 +145,7 @@ SUB install (UPMUrl$)
             EXIT SUB
         END IF
 
-    ELSE 'for https:// we need to use curl/wget.
+    ELSE '...for https we need to use curl/wget.
         PRINT "  Downloading file..."
         PRINT "    curl '" + UPMUrl$ + "' -o /tmp/upm/pkg"
         SHELL "curl '" + UPMUrl$ + "' -o /tmp/upm/pkg"
@@ -184,7 +184,12 @@ SUB install (UPMUrl$)
 
         f% = FREEFILE
         OPEN "/tmp/upm/" + File(n).Name FOR OUTPUT AS #f%
-        PRINT #f%, INFLATE$(MID$(f, UPMPos, File(n).Len));
+        IF UPM.Compressed THEN
+            PRINT #f%, INFLATE$(MID$(f, UPMPos, File(n).Len));
+        ELSE
+            PRINT #f%, MID$(f, UPMPos, File(n).Len);
+        END IF
+
         CLOSE #f%
         UPMPos = UPMPos + File(n).Len
         n = n + 1
@@ -215,69 +220,6 @@ SUB install (UPMUrl$)
 
     PRINT "Installation completed sucessfully!"
 END SUB
-
-
-FUNCTION LoadFile$ (file$)
-
-    f% = FREEFILE
-    OPEN file$ FOR BINARY AS #f%
-    LoadFile$ = SPACE$(LOF(f%))
-    GET #f%, , LoadFile$
-    CLOSE #f%
-
-END FUNCTION
-
-
-'Taken from QB64 wiki
-'Adapted to use a string instead of a file
-FUNCTION DownloadFile$ (url$, timelimit) ' returns -1 if successful, 0 if not
-    PRINT "    Parsing URL..."
-    url2$ = url$
-    x = INSTR(url2$, "/")
-    IF x THEN url2$ = LEFT$(url$, x - 1)
-    'PRINT "done"
-    PRINT "    Connecting to " + url2$ + "..."
-    client = _OPENCLIENT("TCP/IP:80:" + url2$)
-    IF client = 0 THEN
-        'PRINT "failed"
-        PRINT "Failed to connect. Check your internet connection and try again."
-        EXIT FUNCTION
-    END IF
-    'PRINT "done"
-    PRINT "    Sending HTTP request..."
-    e$ = CHR$(13) + CHR$(10) ' end of line characters
-    url3$ = RIGHT$(url$, LEN(url$) - x + 1)
-    x$ = "GET " + url3$ + " HTTP/1.1" + e$
-    x$ = x$ + "Host: " + url2$ + e$ + e$
-    PUT #client, , x$
-    'PRINT "done"
-    PRINT "    Recieving file..."
-    t! = TIMER ' start time
-    DO
-        _DELAY 0.05 ' 50ms delay (20 checks per second)
-        GET #client, , a2$
-        a$ = a$ + a2$
-        i = INSTR(a$, "Content-Length:")
-        IF i THEN
-            i2 = INSTR(i, a$, e$)
-            IF i2 THEN
-                l = VAL(MID$(a$, i + 15, i2 - i - 14))
-                i3 = INSTR(i2, a$, e$ + e$)
-                IF i3 THEN
-                    i3 = i3 + 4 'move i3 to start of data
-                    IF (LEN(a$) - i3 + 1) = l THEN
-                        CLOSE client ' CLOSE CLIENT
-                        DownloadFile$ = MID$(a$, i3, l)
-                        'PRINT "done"
-                        EXIT FUNCTION
-                    END IF ' availabledata = l
-                END IF ' i3
-            END IF ' i2
-        END IF ' i
-    LOOP UNTIL TIMER > t! + timelimit ' (in seconds)
-    CLOSE client
-    'PRINT "failed"
-END FUNCTION
 
 
 'taken from QB64-Themes
@@ -320,6 +262,8 @@ SUB ParseUPM (UPMData$, UPM AS UPMType, File() AS FileType, UPMEnd AS INTEGER) '
                         UPM.Ver = Val$
                     CASE "verno"
                         UPM.VerNo = VAL(Val$)
+                    CASE "compressed"
+                        UPM.Compressed = VAL(Val$)
                 END SELECT
         END SELECT
     LOOP
@@ -343,6 +287,11 @@ SUB ParseUPM (UPMData$, UPM AS UPMType, File() AS FileType, UPMEnd AS INTEGER) '
     IF I% = 0 THEN RETURN
     Key$ = LTRIM$(RTRIM$(LEFT$(Ln$, I%)))
     Val$ = LTRIM$(RTRIM$(MID$(Ln$, I% + 1)))
+    SELECT CASE UCASE$(Val$)
+        CASE "NA": Val$ = ""
+        CASE "TRUE": Val$ = "-1"
+        CASE "FALSE": Val$ = "0"
+    END SELECT
     RETURN
 END SUB
 
@@ -356,7 +305,16 @@ SUB GenerateUPM (UPM AS UPMType, Filename$, FileDir$)
     TmpFile = FREEFILE: OPEN "/tmp/upm/tmp" FOR OUTPUT AS #TmpFile
 
     PRINT "  Generating header..."
-    head$ = NL + "name " + UPM.Name + NL + "dev " + UPM.Dev + NL + "date " + UPM.Date + NL + "ver " + UPM.Ver + NL + "verno " + STR$(UPM.VerNo) + NL + "desc" + NL + UPM.Desc + NL + "." + NL + "files"
+    head$ =                                                 _
+    "name " + UPM.Name + NL                                 _
+    + "dev " + UPM.Dev + NL                                 _
+    + "date " + UPM.Date + NL                               _
+    + "ver " + UPM.Ver + NL                                 _
+    + "verno " + STR$(UPM.VerNo) + NL                       _
+    + "compressed " + STR$(UPM.Compressed) + NL             _
+    + "desc" + NL + UPM.Desc + NL + "." + NL                _
+    + "files"
+
     'PRINT "done"
     PRINT "  Getting directory listing..."
     CHDIR FileDir$
@@ -386,7 +344,11 @@ SUB GenerateUPM (UPM AS UPMType, Filename$, FileDir$)
         s$ = curdir$ + s$
         PRINT "    "; s$; "..."
 
-        f$ = DEFLATE$(LoadFile(s$))
+    IF UPM.Compressed THEN          _
+    f$ = DEFLATE$(LoadFile(s$)) _
+    ELSE                            _
+    f$ = LoadFile(s$)
+
         head$ = head$ + NL + LTRIM$(STR$(LEN(f$))) + " " + s$
 
         PRINT #TmpFile, f$;
@@ -410,56 +372,3 @@ SUB GenerateUPM (UPM AS UPMType, Filename$, FileDir$)
 
     PRINT "UPM file generated sucessfully! Output is at: "; Filename$
 END SUB
-
-FUNCTION RandomMsg$ (l%)
-    CONST Items = 36
-    RANDOMIZE TIMER
-
-    ChooseNew:
-    ItemToPrint% = RND * Items
-    RESTORE msgs
-    FOR i% = 0 TO ItemToPrint%
-        READ s$
-    NEXT
-    IF LEN(s$) > l% GOTO ChooseNew 'Make sure we aren't using a string that's too long
-
-    RandomMsg$ = SPACE$((l% - LEN(s$)) / 2) + s$
-    RandomMsg$ = RandomMsg$ + SPACE$(l% - LEN(RandomMsg$))
-    msgs:
-    DATA "(insert clever joke here)"
-    DATA "Totally not a ripoff of dpkg!"
-    DATA "rm -rf / --no-preserve-root"
-    DATA "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
-    DATA "Isn't this the greatest thing ever?": 'no
-    DATA ":(){ :|:& };:"
-    DATA "yet another package manager nobody needs"
-    DATA "Why did the chicken cross the road?"
-    DATA "i speel good"
-    DATA "[Laughter] - You dumb bitch"
-    DATA "computer go brr"
-    DATA "  this text is TOTALLY centered!            "
-    DATA "HOO HAH TIKI TIKI"
-    DATA "reject humanity,return to monke"
-    DATA "hmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm"
-    DATA "Say hi to Fellippe for me!"
-    DATA "10 PRINT 'Hello, World!'  20 GOTO 10"
-    DATA "My man Kevin on the ledge and shit"
-    DATA "skamtebord"
-    DATA "rm -rf /"
-    DATA "(Y) S ame"
-    DATA "JMP *"
-    DATA "ur mom gae"
-    DATA "curl > wget. Fight me."
-    DATA "hyperfixations go brr"
-    DATA "i use arch btw": 'no i dont
-    DATA "Dead memes go brr"
-    DATA "FFFFFFFFFFFFFFFFUUUUUUUUUUUUUUU..."
-    DATA "Free V-Bucks!"
-    DATA "Look! It's a thing!"
-    DATA "unfinished projects go brr"
-    DATA "Hey all, Scott here!"
-    DATA "I am out of ideas for what to put here lol."
-    DATA "JOKEEFUNNY"
-    DATA "I really should be doing homework right now..."
-    DATA "penis"
-END FUNCTION
