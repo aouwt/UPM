@@ -1,7 +1,9 @@
 $NOPREFIX
-$CONSOLE:ONLY
-_DEST _CONSOLE
+'$CONSOLE:ONLY
+'_DEST _CONSOLE
 
+DIM SHARED NL AS STRING * 1
+NL = CHR$(10)
 TYPE UPMType
     Name AS STRING
     Dev AS STRING
@@ -20,6 +22,7 @@ PRINT "#      v1 -- (c) 2021 all-other-usernames-were-taken      #"
 PRINT "#  https://github.com/all-other-usernames-were-taken/upm  #"
 PRINT "#"; RandomMsg$(57); "#"
 PRINT "###########################################################"
+InitialCWD$ = CWD$
 REM install "https://raw.githubusercontent.com/all-other-usernames-were-taken/UPM/main/test.upm" '<- Ah, GH needs HTTPS. We must use curl, wget, or the like, OR use local files for testing.
 
 SELECT CASE COMMAND$(1)
@@ -29,12 +32,13 @@ SELECT CASE COMMAND$(1)
     CASE "generate-ui"
         RunGenUI
 
-    CASE "help", "?", "--help", "-h"
+    CASE "help", "?", "--help", "-h", ""
         PRINT "USAGE: upm install <package>"
         PRINT "       upm generate-ui"
         'PRINT "       upm generate <options>"
         PRINT "       upm help"
         PRINT ""
+
     CASE ELSE
         PRINT "Invalid command '" + COMMAND$(1) + "'. Use 'upm help' for valid commands."
 END SELECT
@@ -43,7 +47,6 @@ SYSTEM
 
 SUB RunGenUI
     DIM UPM AS UPMType
-    upmfile$ = "Untitled.upm"
     UPM.Name = "untitled-program"
     UPM.Dev = "NA"
     UPM.Desc = "NA"
@@ -80,6 +83,7 @@ SUB RunGenUI
                 INPUT "Version Number: ", UPM.VerNo
 
             CASE "g"
+                GenerateUPM UPM, UPM.Name + ".upm", upmdir$
 
             CASE "f"
                 INPUT "Grab files from: ", k$
@@ -89,7 +93,9 @@ SUB RunGenUI
                     GOTO ContLoop
                 END IF
                 upmdir$ = k$
-
+                hasi.sh` = FILEEXISTS(k$ + "/i.sh") OR FILEEXISTS(k$ + "i.sh")
+                hasi.command` = FILEEXISTS(k$ + "/i.command") OR FILEEXISTS(k$ + "i.command")
+                hasi.bat` = FILEEXISTS(k$ + "/i.bat") OR FILEEXISTS(k$ + "i.bat")
         END SELECT
     LOOP
 
@@ -104,7 +110,13 @@ SUB RunGenUI
     PRINT "(V)ersion: "; UPM.Ver
     PRINT "Ve(r)sion Number: "; UPM.VerNo
     PRINT ""
-    PRINT "<(G)enerate>"
+    PRINT "Supported OSs: ";
+    IF hasi.sh` THEN PRINT "Linux ";
+    IF hasi.bat` THEN PRINT "Windows ";
+    IF hasi.command` THEN PRINT "MacOS";
+    PRINT
+    PRINT
+    PRINT "(G)enerate!"
     RETURN
 END SUB
 
@@ -112,18 +124,18 @@ SUB install (UPMUrl$)
     DIM f AS STRING
     PRINT "Installing package..."
     IF DIREXISTS("/tmp/upm") THEN
-        PRINT "  Removing /tmp/upm...";
+        PRINT "  Removing /tmp/upm..."
         SHELL "rm -rf /tmp/upm"
-        PRINT "done"
+        'PRINT "done"
         PRINT
     END IF
 
     MKDIR "/tmp/upm/"
 
-    IF LEFT$(UPMUrl$, 7) = "file://" THEN 'file:// are local files
-        PRINT "  Loading file...";
-        f = LoadFile(MID$(UPMUrl$, 7))
-        PRINT "done"
+    IF LEFT$(UPMUrl$, 2) = "./" THEN './ are local files
+        PRINT "  Loading file..."
+        f = LoadFile(MID$(UPMUrl$, 3))
+        'PRINT "done"
 
     ELSEIF LEFT$(UPMUrl$, 7) = "http://" THEN 'http:// we can use built-in downlaoder. QB64 cannot use SSL as far as i have seen, so...
         PRINT "  Downloading file..."
@@ -139,29 +151,22 @@ SUB install (UPMUrl$)
         SHELL "curl '" + UPMUrl$ + "' -o /tmp/upm/pkg"
 
         IF FILEEXISTS("/tmp/upm/pkg") THEN
-            PRINT "    Loading file...";
+            PRINT "    Loading file..."
             f = LoadFile("/tmp/upm/pkg")
-            PRINT "done"
-            PRINT "    Removing file...";
+            'PRINT "done"
+            PRINT "    Removing file..."
             SHELL "rm -f /tmp/upm/pkg"
-            PRINT "done"
-            PRINT
+            'PRINT "done"
+            'PRINT
         ELSE
             PRINT "  File could not be downloaded!"
             EXIT SUB
         END IF
     END IF
 
-    'PRINT "  Decompressing...";
-    'f = DEFLATE$(f)
-    'PRINT "done"
-    '?
-
-    PRINT "  Reading package info...";
+    PRINT "  Reading package info..."
     DIM UPM AS UPMType, File(100) AS FileType
     CALL ParseUPM(f, UPM, File(), ofs%)
-    PRINT "done"
-    PRINT
 
     PRINT "  Unpacking files..."
     DIM n AS UNSIGNED INTEGER
@@ -170,14 +175,20 @@ SUB install (UPMUrl$)
     n = 0
     DO
 
-        PRINT "    "; File(n).Name; "...";
+        PRINT "    "; File(n).Name; "..."
+        IF RIGHT$(File(n).Name, 1) = "/" THEN
+            SHELL "mkdir /tmp/upm/" + File(n).Name
+            n = n + 1
+            CONTINUE
+        END IF
+
         f% = FREEFILE
         OPEN "/tmp/upm/" + File(n).Name FOR OUTPUT AS #f%
-        PRINT #f%, MID$(f, UPMPos, File(n).Len);
+        PRINT #f%, INFLATE$(MID$(f, UPMPos, File(n).Len));
         CLOSE #f%
         UPMPos = UPMPos + File(n).Len
         n = n + 1
-        PRINT "done"
+        'PRINT "done"
 
     LOOP UNTIL File(n).Name = ""
     PRINT "  Files sucessfully unpacked."
@@ -190,17 +201,17 @@ SUB install (UPMUrl$)
         PRINT "  Installation script done."
         PRINT
     ELSE
-        PRINT "  Installation script not found, copying all files to CWD...";
+        PRINT "  Installation script not found, copying all files to CWD..."
         SHELL "cp -r /tmp/upm/* ."
-        PRINT "done"
-        PRINT
+        'PRINT "done"
+        'PRINT
     END IF
 
-    PRINT "  Cleaning up...";
+    PRINT "  Cleaning up..."
     SHELL "rm -rf /tmp/upm"
     'SHELL "/tmp/upm/c.sh"
-    PRINT "done"
-    PRINT
+    'PRINT "done"
+    'PRINT
 
     PRINT "Installation completed sucessfully!"
 END SUB
@@ -220,27 +231,27 @@ END FUNCTION
 'Taken from QB64 wiki
 'Adapted to use a string instead of a file
 FUNCTION DownloadFile$ (url$, timelimit) ' returns -1 if successful, 0 if not
-    PRINT "    Parsing URL...";
+    PRINT "    Parsing URL..."
     url2$ = url$
     x = INSTR(url2$, "/")
     IF x THEN url2$ = LEFT$(url$, x - 1)
-    PRINT "done"
-    PRINT "    Connecting to " + url2$ + "...";
+    'PRINT "done"
+    PRINT "    Connecting to " + url2$ + "..."
     client = _OPENCLIENT("TCP/IP:80:" + url2$)
     IF client = 0 THEN
-        PRINT "failed"
+        'PRINT "failed"
         PRINT "Failed to connect. Check your internet connection and try again."
         EXIT FUNCTION
     END IF
-    PRINT "done"
-    PRINT "    Sending HTTP request...";
+    'PRINT "done"
+    PRINT "    Sending HTTP request..."
     e$ = CHR$(13) + CHR$(10) ' end of line characters
     url3$ = RIGHT$(url$, LEN(url$) - x + 1)
     x$ = "GET " + url3$ + " HTTP/1.1" + e$
     x$ = x$ + "Host: " + url2$ + e$ + e$
     PUT #client, , x$
-    PRINT "done"
-    PRINT "    Recieving file...";
+    'PRINT "done"
+    PRINT "    Recieving file..."
     t! = TIMER ' start time
     DO
         _DELAY 0.05 ' 50ms delay (20 checks per second)
@@ -257,7 +268,7 @@ FUNCTION DownloadFile$ (url$, timelimit) ' returns -1 if successful, 0 if not
                     IF (LEN(a$) - i3 + 1) = l THEN
                         CLOSE client ' CLOSE CLIENT
                         DownloadFile$ = MID$(a$, i3, l)
-                        PRINT "done"
+                        'PRINT "done"
                         EXIT FUNCTION
                     END IF ' availabledata = l
                 END IF ' i3
@@ -265,7 +276,7 @@ FUNCTION DownloadFile$ (url$, timelimit) ' returns -1 if successful, 0 if not
         END IF ' i
     LOOP UNTIL TIMER > t! + timelimit ' (in seconds)
     CLOSE client
-    PRINT "failed"
+    'PRINT "failed"
 END FUNCTION
 
 
@@ -282,7 +293,7 @@ SUB ParseUPM (UPMData$, UPM AS UPMType, File() AS FileType, UPMEnd AS INTEGER) '
                 DO
                     GOSUB NewLine
                     IF ASC(Ln$) = 46 THEN EXIT DO
-                    UPM.Desc = UPM.Desc + Ln$ + CHR$(10)
+                    UPM.Desc = UPM.Desc + Ln$ + NL
                 LOOP
 
 
@@ -319,7 +330,7 @@ SUB ParseUPM (UPMData$, UPM AS UPMType, File() AS FileType, UPMEnd AS INTEGER) '
     NewLine:
 
     NextLine_Start% = NextLine_End% + 1
-    NextLine_End% = INSTR(NextLine_Start%, UPMData$, CHR$(10))
+    NextLine_End% = INSTR(NextLine_Start%, UPMData$, NL)
 
     IF NextLine_End% = 0 THEN Ln$ = MID$(UPMData$, NextLine_Start%): RETURN
 
@@ -335,6 +346,70 @@ SUB ParseUPM (UPMData$, UPM AS UPMType, File() AS FileType, UPMEnd AS INTEGER) '
     RETURN
 END SUB
 
+
+SUB GenerateUPM (UPM AS UPMType, Filename$, FileDir$)
+    PRINT "Generating UPM file..."
+    SHELL "rm -rf /tmp/upm"
+    SHELL "mkdir /tmp/upm"
+
+    DIM TmpFile AS INTEGER
+    TmpFile = FREEFILE: OPEN "/tmp/upm/tmp" FOR OUTPUT AS #TmpFile
+
+    PRINT "  Generating header..."
+    head$ = NL + "name " + UPM.Name + NL + "dev " + UPM.Dev + NL + "date " + UPM.Date + NL + "ver " + UPM.Ver + NL + "verno " + STR$(UPM.VerNo) + NL + "desc" + NL + UPM.Desc + NL + "." + NL + "files"
+    'PRINT "done"
+    PRINT "  Getting directory listing..."
+    CHDIR FileDir$
+    SHELL "ls -R -1 -p --color=never -L --quoting-style=literal > /tmp/upm/dir.txt"
+    DIM dir AS INTEGER
+    dir = FREEFILE: OPEN "/tmp/upm/dir.txt" FOR INPUT AS #dir
+    'PRINT "done"
+
+    PRINT "  Adding files..."
+    DO
+
+        LINE INPUT #dir, s$
+        s$ = LTRIM$(RTRIM$(s$))
+        IF s$ = "" THEN CONTINUE
+        IF s$ = ".:" THEN curdir$ = "./": CONTINUE
+
+        SELECT CASE RIGHT$(s$, 1)
+            CASE ":"
+                curdir$ = LEFT$(s$, LEN(s$) - 1) + "/"
+                CONTINUE
+
+            CASE "/"
+                head$ = head$ + NL + "/ " + s$
+                CONTINUE
+        END SELECT
+
+        s$ = curdir$ + s$
+        PRINT "    "; s$; "..."
+
+        f$ = DEFLATE$(LoadFile(s$))
+        head$ = head$ + NL + LTRIM$(STR$(LEN(f$))) + " " + s$
+
+        PRINT #TmpFile, f$;
+
+    LOOP UNTIL EOF(dir)
+    PRINT "  Files added sucessfully."
+
+    CLOSE TmpFile
+    CLOSE dir
+    f$ = ""
+
+    PRINT "  Saving file..."
+
+    DIM outp AS INTEGER
+    outp = FREEFILE: OPEN Filename$ FOR OUTPUT AS #outp
+    PRINT #outp, head$ + NL + ".";
+    PRINT #outp, LoadFile("/tmp/upm/tmp");
+    CLOSE outp
+
+    'PRINT "done"
+
+    PRINT "UPM file generated sucessfully! Output is at: "; Filename$
+END SUB
 
 FUNCTION RandomMsg$ (l%)
     CONST Items = 36
