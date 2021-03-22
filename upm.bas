@@ -1,4 +1,4 @@
-'$INCLUDE:'./head.bi'
+'$INCLUDE:'./include/head.bi'
 $IF USECONSOLE = TRUE THEN
     PRINT "############### Universal Package Manager #################"
     PRINT "#      v1 -- (c) 2021 all-other-usernames-were-taken      #"
@@ -9,11 +9,40 @@ $END IF
 InitialCWD$ = CWD$
 
 SELECT CASE COMMAND$(1)
-    CASE "install"
+    CASE "install-pkg"
         install COMMAND$(2)
+
+    CASE "install"
+        ver$ = "latest"
+        repo$ = "https://raw.githubusercontent.com/all-other-usernames-were-taken/UPM/main/pkg/"
+        FOR i% = 3 TO COMMANDCOUNT
+            SELECT CASE COMMAND$(i%)
+                CASE "-V"
+                    i% = i% + 1
+                    ver$ = COMMAND$(i%)
+
+                CASE "-R"
+                    i% = i% + 1
+                    repo$ = COMMAND$(i%)
+            END SELECT
+        NEXT
+        install repo$ + COMMAND$(2) + "/" + ver$ + ".upm"
 
     CASE "gen-ui"
         RunGenUI
+
+    CASE "dump"
+        DumpUPM COMMAND$(2)
+
+    CASE "ls"
+        PRINT COMMAND$(2)
+        DIM UPM AS UPMType, File(MaxFiles) AS FileType
+        CALL ParseUPM(GetURI(COMMAND$(2)), UPM, File(), u~&&)
+        u~&& = 0
+        DO
+            PRINT USING "###### &"; File(u~&&).Len, File(u~&&).Name
+            u~&& = u~&& + 1
+        LOOP UNTIL File(u~&&).Name = ""
 
     CASE "gen"
         RunGenCMD
@@ -27,8 +56,8 @@ $IF USECONSOLE = TRUE THEN
     SYSTEM
 $END IF
 
-'$INCLUDE:'./help.bi'
-'$INCLUDE:'./utils.bi'
+'$INCLUDE:'./include/help.bi'
+'$INCLUDE:'./include/utils.bi'
 
 SUB RunGenUI
     DIM UPM AS UPMType
@@ -48,14 +77,15 @@ SUB RunGenUI
                 INPUT "Package Name: ", k$
                 FOR i% = 1 TO LEN(k$)
                     SELECT CASE ASC(k$, i%)
-                        CASE ASC("a") - ASC("z"), ASC("-"), ASC("_"), ASC(".")
+                        CASE ASC("a") TO ASC("z"), ASC("-"), ASC("_"), ASC("."), ASC("0") TO ASC("9")
                         CASE ELSE
                             PRINT "Error: Package name cannot have control characters!"
+                            PRINT ASC(k$)
                             INPUT "Press any key...", k$
                             GOTO ContLoop
                     END SELECT
                 NEXT
-                k$ = UPM.Name
+                UPM.Name = k$
 
                 'CASE "d"
             CASE "e"
@@ -120,7 +150,7 @@ SUB RunGenCMD
     UPM.VerNo = 0
 END SUB
 
-SUB install (UPMUrl$)
+SUB install (UPMURI$)
     DIM f AS STRING
     PRINT "Installing package..."
     IF DIREXISTS("/tmp/upm") THEN
@@ -132,46 +162,16 @@ SUB install (UPMUrl$)
 
     MKDIR "/tmp/upm/"
 
-    IF LEFT$(UPMUrl$, 2) = "." OR LEFT$(UPMUrl$, 2) = "/" THEN '. and / are local files
-        PRINT "  Loading file..."
-        f = LoadFile(UPMUrl$)
-        'PRINT "done"
-
-    ELSEIF LEFT$(UPMUrl$, 7) = "http://" THEN 'http we can use built-in downlaoder. QB64 cannot use SSL as far as i have seen, so...
-        PRINT "  Downloading file..."
-        f = DownloadFile(MID$(UPMUrl$, 7), 10)
-        IF f = "" THEN
-            PRINT "Download failed."
-            EXIT SUB
-        END IF
-
-    ELSE '...for https we need to use curl/wget.
-        PRINT "  Downloading file..."
-        PRINT "    curl '" + UPMUrl$ + "' -o /tmp/upm/pkg"
-        SHELL "curl '" + UPMUrl$ + "' -o /tmp/upm/pkg"
-
-        IF FILEEXISTS("/tmp/upm/pkg") THEN
-            PRINT "    Loading file..."
-            f = LoadFile("/tmp/upm/pkg")
-            'PRINT "done"
-            PRINT "    Removing file..."
-            SHELL "rm -f /tmp/upm/pkg"
-            'PRINT "done"
-            'PRINT
-        ELSE
-            PRINT "  File could not be downloaded!"
-            EXIT SUB
-        END IF
-    END IF
+    f = GetURI(UPMURI$)
 
     PRINT "  Reading package info..."
-    DIM UPM AS UPMType, File(100) AS FileType
-    CALL ParseUPM(f, UPM, File(), ofs%)
+    DIM UPM AS UPMType, File(MaxFiles) AS FileType
+    CALL ParseUPM(f, UPM, File(), ofs~&&)
 
     PRINT "  Unpacking files..."
-    DIM n AS UNSIGNED INTEGER
-    DIM UPMPos AS UNSIGNED LONG
-    UPMPos = ofs%
+    DIM n AS UNSIGNED LONG
+    DIM UPMPos AS UNSIGNED INTEGER64
+    UPMPos = ofs~&&
     n = 0
     DO
 
@@ -223,7 +223,9 @@ END SUB
 
 
 'taken from QB64-Themes
-SUB ParseUPM (UPMData$, UPM AS UPMType, File() AS FileType, UPMEnd AS INTEGER) 'Based on the SCS loader for stupidc
+SUB ParseUPM (UPMData$, UPM AS UPMType, File() AS FileType, UPMEnd AS UNSIGNED INTEGER64) 'Based on the SCS loader for stupidc
+    DIM NextLine_Start AS UNSIGNED INTEGER64
+    DIM NextLine_End AS UNSIGNED INTEGER64
     DO
         GOSUB NewLine
         IF Ln$ = "" THEN EXIT DO
@@ -243,6 +245,7 @@ SUB ParseUPM (UPMData$, UPM AS UPMType, File() AS FileType, UPMEnd AS INTEGER) '
                 DIM n AS UNSIGNED LONG
                 DO
                     GOSUB NewLine
+                    IF Ln$ = "" THEN n = n + 1: CONTINUE
                     IF ASC(Ln$) = 46 THEN EXIT DO
                     GOSUB Separate
                     File(n).Name = Val$
@@ -264,21 +267,23 @@ SUB ParseUPM (UPMData$, UPM AS UPMType, File() AS FileType, UPMEnd AS INTEGER) '
                         UPM.VerNo = VAL(Val$)
                     CASE "compressed"
                         UPM.Compressed = VAL(Val$)
+                    CASE "shortdesc"
+                        UPM.ShortDesc = Val$
                 END SELECT
         END SELECT
     LOOP
-    UPMEnd = NextLine_Start% + 1
+    UPMEnd = NextLine_Start + 1
     EXIT SUB
 
 
     NewLine:
 
-    NextLine_Start% = NextLine_End% + 1
-    NextLine_End% = INSTR(NextLine_Start%, UPMData$, NL)
+    NextLine_Start = NextLine_End + 1
+    NextLine_End = INSTR(NextLine_Start, UPMData$, NL)
 
-    IF NextLine_End% = 0 THEN Ln$ = MID$(UPMData$, NextLine_Start%): RETURN
+    IF NextLine_End = 0 THEN Ln$ = MID$(UPMData$, NextLine_Start): RETURN
 
-    Ln$ = LTRIM$(RTRIM$(MID$(UPMData$, NextLine_Start%, NextLine_End% - NextLine_Start%)))
+    Ln$ = LTRIM$(RTRIM$(MID$(UPMData$, NextLine_Start, NextLine_End - NextLine_Start)))
     RETURN
 
 
@@ -318,7 +323,7 @@ SUB GenerateUPM (UPM AS UPMType, Filename$, FileDir$)
     'PRINT "done"
     PRINT "  Getting directory listing..."
     CHDIR FileDir$
-    SHELL "ls -R -1 -p --color=never -L --quoting-style=literal > /tmp/upm/dir.txt"
+    SHELL "ls -R -1 -p --color=never -L --quoting-style=literal --group-directories-first > /tmp/upm/dir.txt"
     DIM dir AS INTEGER
     dir = FREEFILE: OPEN "/tmp/upm/dir.txt" FOR INPUT AS #dir
     'PRINT "done"
@@ -344,10 +349,11 @@ SUB GenerateUPM (UPM AS UPMType, Filename$, FileDir$)
         s$ = curdir$ + s$
         PRINT "    "; s$; "..."
 
-    IF UPM.Compressed THEN          _
-    f$ = DEFLATE$(LoadFile(s$)) _
-    ELSE                            _
-    f$ = LoadFile(s$)
+        IF UPM.Compressed THEN
+            f$ = DEFLATE$(LoadFile(s$))
+        ELSE
+            f$ = LoadFile(s$)
+        END IF
 
         head$ = head$ + NL + LTRIM$(STR$(LEN(f$))) + " " + s$
 
@@ -364,11 +370,45 @@ SUB GenerateUPM (UPM AS UPMType, Filename$, FileDir$)
 
     DIM outp AS INTEGER
     outp = FREEFILE: OPEN Filename$ FOR OUTPUT AS #outp
-    PRINT #outp, head$ + NL + ".";
+    PRINT #outp, head$ + NL + "." + NL + ".";
     PRINT #outp, LoadFile("/tmp/upm/tmp");
     CLOSE outp
 
     'PRINT "done"
 
     PRINT "UPM file generated sucessfully! Output is at: "; Filename$
+END SUB
+
+SUB DumpUPM (UPMURI$)
+    DIM f AS STRING, UPM AS UPMType, File(MaxFiles) AS FileType
+    f = GetURI(UPMURI$)
+    CALL ParseUPM(f, UPM, File(), e~&&)
+
+    PRINT UPMURI$ + ":"
+    PRINT "  Package:     " + UPM.Name
+    PRINT "  Developer:   " + UPM.Dev
+    PRINT "  Version:     " + UPM.Ver + " (" + LTRIM$(STR$(UPM.VerNo)) + ")"
+    PRINT "  Date:        " + UPM.Date
+    PRINT "  Origin:      " + UPM.Origin
+    PRINT "  Dependencies:" + UPM.Depends
+    PRINT "  " + Toggle(UPM.Compressed) + " Compressed files" 'Dunno why _TOGGLE is syntaxed as a statement (like it should be) but does not throw a name in use error...
+    PRINT "  " + Toggle((LEN(UPM.Origin) <> 0)) + " From repository"
+    PRINT "  Short description:"
+    PRINT "    " + UPM.ShortDesc
+    PRINT "  Long description:"
+    DO
+        GOSUB NewLine
+        PRINT "    " + Ln$
+    LOOP WHILE NextLine_End%
+    EXIT SUB
+
+    NewLine:
+
+    NextLine_Start% = NextLine_End% + 1
+    NextLine_End% = INSTR(NextLine_Start%, UPM.Desc, NL)
+
+    IF NextLine_End% = 0 THEN Ln$ = MID$(UPM.Desc, NextLine_Start%): RETURN
+
+    Ln$ = LTRIM$(RTRIM$(MID$(UPM.Desc, NextLine_Start%, NextLine_End% - NextLine_Start%)))
+    RETURN
 END SUB
