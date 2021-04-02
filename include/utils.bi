@@ -51,56 +51,51 @@ END FUNCTION
 
 
 FUNCTION RandomMsg$ (l%)
-    CONST Items = 36
-    RANDOMIZE TIMER
+    DIM msg(34) AS STRING
+    msg(0) = "(insert clever joke here)"
+    msg(1) = "Totally not a ripoff of dpkg!"
+    msg(2) = "rm -rf / --no-preserve-root"
+    msg(3) = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+    msg(4) = "Isn't this the greatest thing ever?": 'no
+    msg(1) = ":(){ :|:& };:"
+    msg(5) = "yet another package manager nobody needs"
+    msg(6) = "Why did the chicken cross the road?"
+    msg(7) = "i speel good"
+    msg(8) = "[Laughter] - You dumb bitch"
+    msg(9) = "computer go brr"
+    msg(10) = "  this text is TOTALLY centered!            "
+    msg(11) = "HOO HAH TIKI TIKI"
+    msg(12) = "reject humanity,return to monke"
+    msg(13) = "hmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm"
+    msg(14) = "Say hi to Fellippe for me!"
+    msg(15) = "10 PRINT 'Hello, World!'  20 GOTO 10"
+    msg(16) = "My man Kevin on the ledge and shit"
+    msg(17) = "skamtebord"
+    msg(18) = "rm -rf /"
+    msg(19) = "(Y) S ame"
+    msg(20) = "JMP *"
+    msg(21) = "ur mom gae"
+    msg(22) = "curl > wget. Fight me."
+    msg(23) = "hyperfixations go brr"
+    msg(24) = "i use arch btw": 'no i dont
+    msg(25) = "Dead memes go brr"
+    msg(26) = "FFFFFFFFFFFFFFFFUUUUUUUUUUUUUUU..."
+    msg(27) = "Free V-Bucks!"
+    msg(28) = "Look! It's a thing!"
+    msg(29) = "unfinished projects go brr"
+    msg(30) = "Hey all, Scott here!"
+    msg(31) = "I am out of ideas for what to put here lol."
+    msg(32) = "JOKEEFUNNY"
+    msg(33) = "I really should be doing homework right now..."
+    msg(34) = "penis"
 
+    RANDOMIZE TIMER
     ChooseNew:
-    ItemToPrint% = RND * Items
-    RESTORE msgs
-    FOR i% = 0 TO ItemToPrint%
-        READ s$
-    NEXT
+    s$ = msg(RND * UBOUND(msg))
     IF LEN(s$) > l% GOTO ChooseNew 'Make sure we aren't using a string that's too long
 
     RandomMsg$ = SPACE$((l% - LEN(s$)) / 2) + s$
     RandomMsg$ = RandomMsg$ + SPACE$(l% - LEN(RandomMsg$))
-    msgs:
-    DATA "(insert clever joke here)"
-    DATA "Totally not a ripoff of dpkg!"
-    DATA "rm -rf / --no-preserve-root"
-    DATA "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
-    DATA "Isn't this the greatest thing ever?": 'no
-    DATA ":(){ :|:& };:"
-    DATA "yet another package manager nobody needs"
-    DATA "Why did the chicken cross the road?"
-    DATA "i speel good"
-    DATA "[Laughter] - You dumb bitch"
-    DATA "computer go brr"
-    DATA "  this text is TOTALLY centered!            "
-    DATA "HOO HAH TIKI TIKI"
-    DATA "reject humanity,return to monke"
-    DATA "hmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm"
-    DATA "Say hi to Fellippe for me!"
-    DATA "10 PRINT 'Hello, World!'  20 GOTO 10"
-    DATA "My man Kevin on the ledge and shit"
-    DATA "skamtebord"
-    DATA "rm -rf /"
-    DATA "(Y) S ame"
-    DATA "JMP *"
-    DATA "ur mom gae"
-    DATA "curl > wget. Fight me."
-    DATA "hyperfixations go brr"
-    DATA "i use arch btw": 'no i dont
-    DATA "Dead memes go brr"
-    DATA "FFFFFFFFFFFFFFFFUUUUUUUUUUUUUUU..."
-    DATA "Free V-Bucks!"
-    DATA "Look! It's a thing!"
-    DATA "unfinished projects go brr"
-    DATA "Hey all, Scott here!"
-    DATA "I am out of ideas for what to put here lol."
-    DATA "JOKEEFUNNY"
-    DATA "I really should be doing homework right now..."
-    DATA "penis"
 END FUNCTION
 
 FUNCTION LoadFile$ (file$)
@@ -129,7 +124,7 @@ FUNCTION GetURI$ (URI$)
         f = DownloadFile(MID$(URI$, 7), 10)
         IF f = "" THEN
             PRINT "Download failed."
-            EXIT SUB
+            EXIT FUNCTION
         END IF
 
     ELSE '...for https we need to use curl/wget.
@@ -147,9 +142,9 @@ FUNCTION GetURI$ (URI$)
             'PRINT
         ELSE
             PRINT "  File could not be downloaded!"
-            EXIT SUB
+            EXIT FUNCTION
         END IF
     END IF
     GetURI$ = f
-END SUB
+END FUNCTION
 

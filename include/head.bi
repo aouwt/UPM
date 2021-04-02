@@ -6,49 +6,28 @@ CONST True = -1
 CONST False = 0
 
 
-
-'Uncomment this to force a value
-'$LET USECONSOLE = TRUE
-
-'If USECONSOLE is NOT defined
-$IF USECONSOLE THEN
-$ELSE
-    'QB64 1.4 doesn't have VERSION, but 1.5 does, so in 1.4 VERSION = 0
-    'this catches people using 1.5 and compiles using SCREEN instead of $CONSOLE
-    $IF VERSION = 1.5 THEN
-        $LET USECONSOLE = FALSE
-    $ELSE
-        $LET USECONSOLE = TRUE
-    $END IF
-$END IF
-
-$IF USECONSOLE = FALSE THEN
-    SCREEN NEWIMAGE(640, 480, 256)
-    FONT 8
-$ELSE
-    $CONSOLE:ONLY
-    DEST CONSOLE
-$END IF
-
-
-
 'Choose the OS
 $IF WIN THEN
     CONST Win = -1
     CONST Linux = 0
     CONST Mac = 0
+    CONST ShExt = ".bat"
 $ELSEIF LINUX THEN
     CONST Win = 0
     CONST Linux = -1
     CONST Mac = 0
+    CONST ShExt = ".sh"
 $ELSEIF MACOS THEN
-    CONST Win = 0
-    CONST Linux = 0
-    CONST Mac = -1
+    'CONST Win = 0
+    'CONST Linux = 0
+    'CONST Mac = -1
+    'CONST ShExt = ".command"
+    $error MacOS support is not integrated yet!
+    'i dont have a Mac so i cant test it...
 $ELSE
     'This literally should _never_ happen (since QB64 has only a predefined set of values for determining the OS) but who knows
     $ERROR Could not determine OS type!
-$ENDIF
+$END IF
 
 
 
@@ -63,7 +42,7 @@ $ELSEIF 32BIT THEN
 $ELSE
     'This, also, should never happen, but you never know.
     $ERROR Could not determine CPU archetecture!
-$ENDIF
+$END IF
 
 
 

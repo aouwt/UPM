@@ -1,11 +1,9 @@
 '$INCLUDE:'./include/head.bi'
-$IF USECONSOLE = TRUE THEN
-    PRINT "############### Universal Package Manager #################"
-    PRINT "#      v1 -- (c) 2021 all-other-usernames-were-taken      #"
-    PRINT "#  https://github.com/all-other-usernames-were-taken/upm  #"
-    PRINT "#"; RandomMsg$(57); "#"
-    PRINT "###########################################################"
-$END IF
+PRINT "############### Universal Package Manager #################"
+PRINT "#      v1 -- (c) 2021 all-other-usernames-were-taken      #"
+PRINT "#  https://github.com/all-other-usernames-were-taken/upm  #"
+PRINT "#"; RandomMsg$(57); "#"
+PRINT "###########################################################"
 InitialCWD$ = CWD$
 
 SELECT CASE COMMAND$(1)
@@ -52,10 +50,7 @@ SELECT CASE COMMAND$(1)
     CASE ELSE
         PRINT "Invalid command '" + COMMAND$(1) + "'. Use 'upm help' for valid commands."
 END SELECT
-$IF USECONSOLE = TRUE THEN
-    SYSTEM
-$END IF
-
+SYSTEM
 '$INCLUDE:'./include/help.bi'
 '$INCLUDE:'./include/utils.bi'
 
@@ -111,9 +106,9 @@ SUB RunGenUI
                     GOTO ContLoop
                 END IF
                 upmdir$ = k$
-                hasi.sh` = FILEEXISTS(k$ + "/i.sh") OR FILEEXISTS(k$ + "i.sh")
-                hasi.command` = FILEEXISTS(k$ + "/i.command") OR FILEEXISTS(k$ + "i.command")
-                hasi.bat` = FILEEXISTS(k$ + "/i.bat") OR FILEEXISTS(k$ + "i.bat")
+                'hasi.sh` = FILEEXISTS(k$ + "/i.sh") OR FILEEXISTS(k$ + "i.sh")
+                'hasi.command` = FILEEXISTS(k$ + "/i.command") OR FILEEXISTS(k$ + "i.command")
+                'hasi.bat` = FILEEXISTS(k$ + "/i.bat") OR FILEEXISTS(k$ + "i.bat")
         END SELECT
     LOOP
 
@@ -129,10 +124,10 @@ SUB RunGenUI
     PRINT "Ve(r)sion Number: "; UPM.VerNo
     PRINT "(U)se compression: "; UPM.Compressed
     PRINT ""
-    PRINT "Supported OSs: ";
-    IF hasi.sh` THEN PRINT "Linux ";
-    IF hasi.bat` THEN PRINT "Windows ";
-    IF hasi.command` THEN PRINT "MacOS";
+    'PRINT "Supported OSs: ";
+    'IF hasi.sh` THEN PRINT "Linux ";
+    'IF hasi.bat` THEN PRINT "Windows ";
+    'IF hasi.command` THEN PRINT "MacOS";
     PRINT
     PRINT
     PRINT "(G)enerate!"
@@ -200,9 +195,15 @@ SUB install (UPMURI$)
     PRINT
 
 
-    IF FILEEXISTS("/tmp/upm/i.sh") THEN
+    IF FILEEXISTS("/tmp/upm/i" + ShExt) THEN
         PRINT "  Installing via external installer..."
-        SHELL "/tmp/upm/i.sh"
+        IF Win THEN
+            SHELL "exec " + CHR$(34) + tmpdir$ + "\i" + ShExt + CHR$(34) 'AUGH why does batch have to be so stupid. Why can't windows just use bash or zsh?
+        ELSEIF Linux THEN
+            SHELL "/bin/sh '" + tmpdir$ + "/i" + ShExt + "'"
+        ELSEIF Mac THEN
+            'idk how to access bash in mac
+        END IF
         PRINT "  Installation script done."
         PRINT
     ELSE
@@ -220,7 +221,6 @@ SUB install (UPMURI$)
 
     PRINT "Installation completed sucessfully!"
 END SUB
-
 
 'taken from QB64-Themes
 SUB ParseUPM (UPMData$, UPM AS UPMType, File() AS FileType, UPMEnd AS UNSIGNED INTEGER64) 'Based on the SCS loader for stupidc
